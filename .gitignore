@@ -1,0 +1,9 @@
+data.xml
+aaa.jpg
+*.jpg
+*.png
+*.jpeg
+Mobile/
+FacebookScraper/
+Test/
+.claude/

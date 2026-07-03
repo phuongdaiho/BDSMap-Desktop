@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bản đồ</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+<!-- INJECT:style.css -->
+  </style>
+</head>
+<body>
+
+  <header>
+    <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+    <h1>Bản đồ</h1>
+    <button id="toggle-sidebar" onclick="toggleSidebar()">
+      📋 Địa điểm đã lưu <span id="sidebar-count">0</span>
+    </button>
+  </header>
+
+  <div class="search-bar">
+    <div class="search-wrap">
+      <input type="text" id="search-input" placeholder="Tìm kiếm địa điểm..." autocomplete="off" />
+      <div id="search-results"></div>
+    </div>
+    <button onclick="searchLocation()">Tìm kiếm</button>
+    <div class="sep"></div>
+    <input type="number" id="input-lat" placeholder="Lat" step="0.0001" />
+    <input type="number" id="input-lng" placeholder="Lng" step="0.0001" />
+    <button onclick="goToCoords()">Đến tọa độ</button>
+    <div class="sep"></div>
+    <button class="gray" onclick="goToMyLocation()">📍 Vị trí tôi</button>
+    <div class="sep"></div>
+    <button id="btn-save-xml" class="gray" onclick="saveXML()" title="Lưu toàn bộ dữ liệu ra file data.xml">💾 Lưu XML</button>
+    <label class="gray-btn" title="Mở file data.xml">
+      📂 Mở XML
+      <input type="file" id="import-xml" accept=".xml" style="display:none" onchange="importXML(event)" />
+    </label>
+  </div>
+
+  <div class="main">
+    <div id="map">
+      <div id="map-hint">Click vào bản đồ để thêm địa điểm</div>
+    </div>
+
+    <div id="sidebar">
+      <div id="sidebar-resizer"></div>
+      <div class="sidebar-header">
+        <span>Danh sách địa điểm</span>
+        <select id="group-by" title="Nhóm theo trường">
+          <option value="">☰ Danh sách</option>
+          <option value="area">📍 Khu vực</option>
+          <option value="direction">🧭 Hướng</option>
+          <option value="usage">🏠 Công năng</option>
+          <option value="structure">🏗️ Kết cấu</option>
+          <option value="color">🎨 Màu marker</option>
+          <option value="price">💰 Giá dự kiến</option>
+        </select>
+      </div>
+      <div id="location-list">
+        <div class="sidebar-empty">Chưa có địa điểm nào.<br/>Click lên bản đồ để thêm.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal thêm/sửa địa điểm -->
+  <div class="modal-overlay hidden" id="modal-overlay">
+    <div class="modal">
+      <div class="modal-header" id="modal-title">Thêm địa điểm</div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Tên địa điểm *</label>
+          <input type="text" id="field-name" placeholder="VD: Nhà tôi, Công ty, Quán cà phê..." />
+        </div>
+        <div class="form-group">
+          <label>Mô tả ngắn</label>
+          <input type="text" id="field-desc" placeholder="VD: Địa chỉ, loại địa điểm..." />
+        </div>
+        <div class="form-group">
+          <label>Ghi chú thêm</label>
+          <textarea id="field-note" placeholder="Thêm ghi chú tùy ý..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Hình ảnh</label>
+          <div style="display:flex;gap:7px;align-items:center">
+            <input type="url" id="field-image" placeholder="Dán link ảnh hoặc chọn file..." style="flex:1" />
+            <label class="upload-btn" id="upload-btn-label" title="Chọn ảnh từ máy — tự động nén và lưu lên telegra.ph (miễn phí, không cần tài khoản)">
+              📁 Chọn ảnh
+              <input type="file" id="field-image-file" accept="image/*" style="display:none" />
+            </label>
+          </div>
+          <div id="upload-status"></div>
+          <div id="image-preview" style="display:none;margin-top:8px;position:relative">
+            <img id="preview-img" src="" alt="preview"
+              style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;border:1px solid #ddd;display:block" />
+            <button onclick="clearImage()" title="Xóa ảnh"
+              style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.55);color:white;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:0.85rem;line-height:1">✕</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Đường link web</label>
+          <input type="url" id="field-link" placeholder="https://..." />
+        </div>
+        <div class="form-section-title">Thông tin đất</div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1.2">
+            <label>Hướng</label>
+            <select id="field-direction">
+              <option value="">-- Chọn hướng --</option>
+              <option value="Đông">Đông</option>
+              <option value="Tây">Tây</option>
+              <option value="Nam">Nam</option>
+              <option value="Bắc">Bắc</option>
+              <option value="Đông Bắc">Đông Bắc</option>
+              <option value="Đông Nam">Đông Nam</option>
+              <option value="Tây Bắc">Tây Bắc</option>
+              <option value="Tây Nam">Tây Nam</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Diện tích (m²)</label>
+            <input type="number" id="field-acreage" placeholder="0" min="0" step="0.1" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Chiều ngang (m)</label>
+            <input type="number" id="field-width" placeholder="0" min="0" step="0.1" />
+          </div>
+          <div class="form-group">
+            <label>Chiều dài (m)</label>
+            <input type="number" id="field-length" placeholder="0" min="0" step="0.1" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Giá trị dự kiến</label>
+          <input type="text" id="field-price" placeholder="VD: 1.5 tỷ, 500 triệu..." />
+        </div>
+        <div class="form-section-title">Tài sản gắn liền trên đất</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>DT xây dựng (m²)</label>
+            <input type="number" id="field-buildarea" placeholder="0" min="0" step="0.1" />
+          </div>
+          <div class="form-group">
+            <label>DT sàn (m²)</label>
+            <input type="number" id="field-floorarea" placeholder="0" min="0" step="0.1" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Kết cấu</label>
+          <input type="text" id="field-structure" placeholder="VD: Nhà cấp 4, BTCT, Khung thép..." />
+        </div>
+        <div class="form-group">
+          <label>Công năng</label>
+          <input type="text" id="field-usage" placeholder="VD: Nhà ở, Thương mại, Đất nông nghiệp..." />
+        </div>
+        <div class="form-group">
+          <label>Màu marker</label>
+          <div class="color-picker" id="color-picker">
+            <div class="color-dot selected" data-color="#e53935" style="background:#e53935" title="Đỏ"></div>
+            <div class="color-dot" data-color="#1a73e8" style="background:#1a73e8" title="Xanh lam"></div>
+            <div class="color-dot" data-color="#43a047" style="background:#43a047" title="Xanh lá"></div>
+            <div class="color-dot" data-color="#f57c00" style="background:#f57c00" title="Cam"></div>
+            <div class="color-dot" data-color="#8e24aa" style="background:#8e24aa" title="Tím"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Tọa độ</label>
+          <div style="display:flex;gap:8px">
+            <div style="flex:1;position:relative">
+              <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:0.75rem;color:#888;pointer-events:none">Lat</span>
+              <input type="text" id="modal-lat" readonly
+                style="width:100%;padding-left:36px;background:#f8f9fa;color:#444;cursor:default" />
+            </div>
+            <div style="flex:1;position:relative">
+              <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:0.75rem;color:#888;pointer-events:none">Lng</span>
+              <input type="text" id="modal-lng" readonly
+                style="width:100%;padding-left:36px;background:#f8f9fa;color:#444;cursor:default" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeModal()">Hủy</button>
+        <button class="btn-save" onclick="saveLocation()">Lưu địa điểm</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+<!-- INJECT:JS -->
+  </script>
+</body>
+</html>
