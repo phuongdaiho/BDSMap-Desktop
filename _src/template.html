@@ -2,52 +2,73 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Bản đồ</title>
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <style>
 <!-- INJECT:style.css -->
-  </style>
+</style>
 </head>
 <body>
 
   <header>
     <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
     <h1>Bản đồ</h1>
-    <button id="toggle-sidebar" onclick="toggleSidebar()">
-      📋 Địa điểm đã lưu <span id="sidebar-count">0</span>
-    </button>
   </header>
 
   <div class="search-bar">
     <div class="search-wrap">
-      <input type="text" id="search-input" placeholder="Tìm kiếm địa điểm..." autocomplete="off" />
+      <input type="text" id="search-input" placeholder="Tìm địa điểm hoặc nhập tọa độ (lat, lng)..." autocomplete="off" />
       <div id="search-results"></div>
     </div>
     <button onclick="searchLocation()">Tìm kiếm</button>
     <div class="sep"></div>
-    <input type="number" id="input-lat" placeholder="Lat" step="0.0001" />
-    <input type="number" id="input-lng" placeholder="Lng" step="0.0001" />
-    <button onclick="goToCoords()">Đến tọa độ</button>
-    <div class="sep"></div>
-    <button class="gray" onclick="goToMyLocation()">📍 Vị trí tôi</button>
-    <div class="sep"></div>
-    <button id="btn-save-xml" class="gray" onclick="saveXML()" title="Lưu toàn bộ dữ liệu ra file data.xml">💾 Lưu XML</button>
-    <label class="gray-btn" title="Mở file data.xml">
-      📂 Mở XML
-      <input type="file" id="import-xml" accept=".xml" style="display:none" onchange="importXML(event)" />
-    </label>
+    <div class="xml-menu-wrap" id="xml-menu-wrap">
+      <button class="gray" onclick="toggleXmlMenu()">📁 XML ▾</button>
+      <div class="xml-dropdown" id="xml-dropdown">
+        <button id="btn-save-xml" onclick="saveXML();closeXmlMenu()" title="Lưu toàn bộ dữ liệu ra file data.xml">💾 Lưu XML</button>
+        <label title="Mở file data.xml" onclick="closeXmlMenu()">
+          📂 Mở XML
+          <input type="file" id="import-xml" accept=".xml" style="display:none" onchange="importXML(event)" />
+        </label>
+      </div>
+    </div>
   </div>
 
   <div class="main">
     <div id="map">
       <div id="map-hint">Click vào bản đồ để thêm địa điểm</div>
+      <div id="layer-control">
+        <button id="btn-my-location" class="measure-btn" onclick="goToMyLocation()" title="Vị trí của tôi">🚩</button>
+        <button id="btn-toggle-community" class="measure-btn active" onclick="toggleCommunityMarkers()" title="Ẩn địa điểm cộng đồng">🌍</button>
+        <button id="btn-layer-toggle" onclick="toggleLayerPicker()" title="Chế độ xem bản đồ">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/>
+          </svg>
+        </button>
+        <div class="layer-picker" id="layer-picker">
+          <button class="layer-picker-item active" id="layer-opt-street" onclick="setBaseLayer('street')"><span class="check">✓</span>🗺️ Bản đồ</button>
+          <button class="layer-picker-item" id="layer-opt-satellite" onclick="setBaseLayer('satellite')"><span class="check" style="visibility:hidden">✓</span>🛰️ Vệ tinh</button>
+          <button class="layer-picker-item" id="layer-opt-hybrid" onclick="setBaseLayer('hybrid')"><span class="check" style="visibility:hidden">✓</span>🛰️ Vệ tinh + đường</button>
+        </div>
+      </div>
     </div>
 
+    <div id="sidebar-backdrop" onclick="toggleSidebar()"></div>
     <div id="sidebar">
-      <div id="sidebar-resizer"></div>
+
+      <div class="sidebar-user-row">
+        <span id="sidebar-user-label">👤 Khách</span>
+        <button id="sidebar-auth-btn" onclick="openAuthModal()">Đăng nhập</button>
+      </div>
       <div class="sidebar-header">
-        <span>Danh sách địa điểm</span>
+        <span style="font-size:0.85rem;font-weight:600;color:#202124;flex:1">Danh sách địa điểm</span>
         <select id="group-by" title="Nhóm theo trường">
           <option value="">☰ Danh sách</option>
           <option value="area">📍 Khu vực</option>
@@ -58,9 +79,36 @@
           <option value="price">💰 Giá dự kiến</option>
         </select>
       </div>
+      <div class="sidebar-tabs">
+        <button class="sidebar-tab active" id="tab-personal" onclick="switchSidebarTab('personal')">Cá nhân<span class="tab-count" id="count-personal">0</span></button>
+        <button class="sidebar-tab" id="tab-community" onclick="switchSidebarTab('community')">Cộng đồng<span class="tab-count" id="count-community">0</span></button>
+      </div>
       <div id="location-list">
         <div class="sidebar-empty">Chưa có địa điểm nào.<br/>Click lên bản đồ để thêm.</div>
       </div>
+    </div>
+  </div>
+
+  <!-- Auth Modal -->
+  <div id="auth-overlay" class="hidden">
+    <div id="auth-modal">
+      <div class="auth-logo">🗺️</div>
+      <div class="auth-title">Bản đồ BĐS</div>
+      <div class="auth-subtitle" id="auth-subtitle">Đăng nhập để đồng bộ dữ liệu đa thiết bị</div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Đăng nhập</button>
+        <button class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Đăng ký</button>
+      </div>
+      <div class="auth-error" id="auth-error"></div>
+      <div class="auth-success" id="auth-success"></div>
+      <input class="auth-input" type="email" id="auth-email" placeholder="Email" autocomplete="email" />
+      <input class="auth-input" type="password" id="auth-password" placeholder="Mật khẩu" autocomplete="current-password" />
+      <div class="auth-forgot" id="auth-forgot-wrap">
+        <a onclick="forgotPassword()">Quên mật khẩu?</a>
+      </div>
+      <button class="auth-btn-primary" id="auth-submit-btn" onclick="authSubmit()">Đăng nhập</button>
+      <div class="auth-divider">hoặc</div>
+      <button class="auth-btn-guest" onclick="continueAsGuest()">👤 Tiếp tục không cần đăng nhập</button>
     </div>
   </div>
 
@@ -83,24 +131,19 @@
         </div>
         <div class="form-group">
           <label>Hình ảnh</label>
-          <div style="display:flex;gap:7px;align-items:center">
-            <input type="url" id="field-image" placeholder="Dán link ảnh hoặc chọn file..." style="flex:1" />
-            <label class="upload-btn" id="upload-btn-label" title="Chọn ảnh từ máy — tự động nén và lưu lên telegra.ph (miễn phí, không cần tài khoản)">
-              📁 Chọn ảnh
-              <input type="file" id="field-image-file" accept="image/*" style="display:none" />
-            </label>
-          </div>
-          <div id="upload-status"></div>
-          <div id="image-preview" style="display:none;margin-top:8px;position:relative">
-            <img id="preview-img" src="" alt="preview"
-              style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;border:1px solid #ddd;display:block" />
-            <button onclick="clearImage()" title="Xóa ảnh"
-              style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.55);color:white;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:0.85rem;line-height:1">✕</button>
-          </div>
+          <div id="images-container"></div>
+          <button type="button" class="add-image-btn" onclick="addImageSlot()">+ Thêm ảnh</button>
         </div>
         <div class="form-group">
           <label>Đường link web</label>
           <input type="url" id="field-link" placeholder="https://..." />
+        </div>
+        <div class="form-group">
+          <label>Số điện thoại liên hệ</label>
+          <div style="display:flex;gap:7px;align-items:center">
+            <input type="tel" id="field-phone" placeholder="VD: 0912 345 678" style="flex:1" />
+            <a id="call-btn-modal" href="tel:" style="display:none;background:#43a047;color:white;border-radius:8px;padding:7px 12px;font-size:0.85rem;text-decoration:none;white-space:nowrap">📞 Gọi</a>
+          </div>
         </div>
         <div class="form-section-title">Thông tin đất</div>
         <div class="form-row">
@@ -156,6 +199,45 @@
           <label>Công năng</label>
           <input type="text" id="field-usage" placeholder="VD: Nhà ở, Thương mại, Đất nông nghiệp..." />
         </div>
+        <div class="form-section-title">Pháp lý & Nội thất</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Lộ giới</label>
+            <input type="text" id="field-roadwidth" placeholder="VD: 6m, 12m..." />
+          </div>
+          <div class="form-group">
+            <label>Pháp lý</label>
+            <input type="text" id="field-legal" list="legal-options" placeholder="Chọn hoặc nhập..." autocomplete="off" />
+            <datalist id="legal-options">
+              <option value="Sổ đỏ/Sổ hồng">
+              <option value="Sổ hộ">
+              <option value="Giấy tờ viết tay">
+              <option value="Có đóng thuế phường">
+            </datalist>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Nội thất</label>
+          <input type="text" id="field-interior" list="interior-options" placeholder="Chọn hoặc nhập..." autocomplete="off" />
+          <datalist id="interior-options">
+            <option value="Đầy đủ">
+            <option value="Không">
+            <option value="Để lại toàn bộ nội thất">
+          </datalist>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1.2">
+            <label>Tình trạng BĐS</label>
+            <select id="field-status">
+              <option value="Đang bán">Đang bán</option>
+              <option value="Đã bán">Đã bán</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1">
+            <label>Ngày cập nhật</label>
+            <input type="date" id="field-updated-date" />
+          </div>
+        </div>
         <div class="form-group">
           <label>Màu marker</label>
           <div class="color-picker" id="color-picker">
@@ -164,6 +246,16 @@
             <div class="color-dot" data-color="#43a047" style="background:#43a047" title="Xanh lá"></div>
             <div class="color-dot" data-color="#f57c00" style="background:#f57c00" title="Cam"></div>
             <div class="color-dot" data-color="#8e24aa" style="background:#8e24aa" title="Tím"></div>
+          </div>
+        </div>
+        <div class="form-group" id="public-share-group" style="display:none">
+          <label>Chia sẻ cộng đồng</label>
+          <div class="public-toggle-row">
+            <label class="toggle-switch">
+              <input type="checkbox" id="field-ispublic" />
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </label>
+            <span id="public-toggle-label">Riêng tư</span>
           </div>
         </div>
         <div class="form-group">
@@ -189,9 +281,39 @@
     </div>
   </div>
 
+  <!-- Quick View overlay -->
+  <div id="quickview-overlay" class="qv-hidden">
+    <div class="qv-header">
+      <span class="qv-counter" id="qv-counter">0 / 0</span>
+      <span class="qv-header-title">🏠 BĐS đang bán gần bạn (bán kính 5 km)</span>
+      <button class="qv-close" onclick="closeQuickView()">✕</button>
+    </div>
+    <div class="qv-body" id="qv-body"></div>
+    <div class="qv-footer">
+      <button class="qv-btn-nav" id="qv-prev" onclick="prevQuick()">◀ Trước</button>
+      <button class="qv-btn-map" onclick="quickViewGoToMap()">📍 Trên bản đồ</button>
+      <button class="qv-btn-nav" id="qv-next" onclick="nextQuick()">Sau ▶</button>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.min.js"></script>
   <script>
 <!-- INJECT:JS -->
-  </script>
+</script>
+
+  <!-- Bottom Navigation -->
+  <div id="bottom-nav">
+    <button id="btn-quickview" onclick="openQuickView()" title="Xem nhanh BĐS đang bán trong bán kính 5 km">
+      <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+      <span>Xem nhanh</span>
+    </button>
+    <div id="bottom-nav-divider"></div>
+    <button id="toggle-sidebar" onclick="toggleSidebar()">
+      <svg viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+      <span class="btn-label-row"><span id="header-user-label">Của tôi</span><span class="mode-dot guest" id="mode-dot"></span></span>
+    </button>
+  </div>
+
 </body>
 </html>

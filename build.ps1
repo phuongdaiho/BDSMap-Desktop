@@ -10,7 +10,7 @@ $template = [System.IO.File]::ReadAllText("$srcDir\template.html", $utf8NoBom)
 $css = [System.IO.File]::ReadAllText("$srcDir\style.css", $utf8NoBom)
 
 # ── Đọc và ghép JS theo thứ tự dependency ──
-$jsFiles = @('state','map','icon','popup','xml','markers','sidebar','actions','modal','image','search','geo','init')
+$jsFiles = @('state','map','icon','popup','markers','sidebar','xml','modal','image','actions','ocr','events','search','geo','firestore','auth','quickview')
 $jsParts = $jsFiles | ForEach-Object {
     $content = [System.IO.File]::ReadAllText("$srcDir\$_.js", $utf8NoBom)
     "// ═══════════ $($_.ToUpper()) ═══════════`n$content"
